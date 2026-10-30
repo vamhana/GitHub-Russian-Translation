@@ -2,7 +2,7 @@
 // @name         GitHub Russian Translation + Git Help
 // @name:ru      Русификатор GitHub + помощь по Git
 // @namespace    http://tampermonkey.net/
-// @version      7.5
+// @version      7.7
 // @description  Полный перевод GitHub на русский + глоссарий Git-терминов, шпаргалка, подсказки для новичков.
 // @author       smi-falcon + community improvements
 // @match        *://github.com/*
@@ -12633,6 +12633,25 @@
         "View all categories": "Показать все категории",
         "View all continuous integration workflows": "Показать все рабочие процессы непрерывной интеграции",
         "View all security workflows": "Показать все рабочие процессы безопасности",
+
+        // === fix.py applied 7.6 ===
+        "Click to view details in the merge panel": "Нажмите, чтобы просмотреть подробности на панели слияния",
+        "Click to view details in the merge panel.": "Нажмите, чтобы просмотреть подробности на панели слияния.",
+        "Merging is blocked": "Слияние заблокировано",
+        "Merging is currently blocked": "Слияние в данный момент заблокировано",
+        "Merging is currently blocked. Click to view details in the merge panel.": "Слияние в данный момент заблокировано. Нажмите, чтобы просмотреть подробности на панели слияния.",
+        "This pull request has merge conflicts that must be resolved before it can be merged.": "У этого запроса на слияние есть конфликты, которые необходимо разрешить перед слиянием.",
+        "View details in the merge panel": "Просмотреть подробности на панели слияния",
+
+        // === fix.py applied 7.7 ===
+        "Merge Status": "Статус слияния",
+        "Merge status": "Статус слияния",
+        "Merge status details": "Подробности статуса слияния",
+        "Merge status: blocked": "Статус слияния: заблокировано",
+        "Merge status: draft": "Статус слияния: черновик",
+        "Merge status: pending": "Статус слияния: ожидание",
+        "Merge status: ready": "Статус слияния: готово",
+        "View merge status": "Просмотреть статус слияния",
 };
 
     // === нормализованный индекс (пробелы и \n → одиночный пробел) ===
