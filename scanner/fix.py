@@ -67,7 +67,8 @@ def main():
     existing = get_existing_keys(block)
 
     todo = json.loads(Path(args.todo).read_text(encoding="utf-8"))
-    to_add = {k: v for k, v in todo.items() if v.strip()}
+    to_add = {k: v for k, v in todo.items()
+              if not k.startswith("_") and isinstance(v, str) and v.strip()}
     skipped_empty = [k for k, v in todo.items() if not v.strip()]
     overwrite = [k for k in to_add if k in existing]
 
