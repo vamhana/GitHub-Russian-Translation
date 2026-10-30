@@ -1,29 +1,56 @@
 # GitHub RU — пайплайн русификации
 
-Набор из шести Python-скриптов + userscript для Тампермонки, которые вместе
+Набор из шести Python-скриптов + userscript для Tampermonkey, которые вместе
 **находят**, **переводят** и **верифицируют** перевод интерфейса GitHub.
 
-Ниже — кто за что отвечает, как всё связать и что делать в типовых случаях.
-(GitHub Russian Translation.js положить рядом)
+---
+
+## Структура репозитория
+
+```
+GitHub-Russian-Translation/
+├── Userscript/
+│   ├── GitHub Russian Translation.js          ← userscript (публикуется)
+│   ├── GitHub Russian Translation.js.orig     ← бэкап оригинала (.gitignore)
+│   └── GitHub Time Translation.js             ← чужой, не трогаем
+├── scanner/                                    ← этот README и Python-скрипты
+│   ├── pages.py
+│   ├── auth_utils.py
+│   ├── сканер_1.py
+│   ├── сканер_2.py
+│   ├── fix.py
+│   ├── discover_pages.py
+│   ├── save_auth.py
+│   └── README.md
+├── .gitignore
+├── .gitattributes
+├── License.md
+└── Readme.md
+```
+
+Вспомогательные артефакты (создаются по ходу, в `.gitignore`):
+`auth.json`, `inventory.json`, `verify_report.md`, `to_translate.json`,
+`to_translate_bugs.json`, `discovered_pages.json`, `discovered_pages.py`,
+`discovered_diff.md`, `сканер.md`.
+
 ---
 
 ## TL;DR — карта файлов
 
 | Файл | Роль | Импортируется кем |
 |---|---|---|
-| **pages.py** | Единый список URL (core/settings/user/noise/…) | сканер_1, сканер_2 |
-| **auth_utils.py** | Общий auth-флоу + детект «протухшей сессии» | сканер_1, сканер_2 |
-| **сканер_1.py** | Обходит страницы → `inventory.json` | — |
-| **сканер_2.py** | Верификация с активным userscript → отчёты + TODO | — |
-| **fix.py** | Вливает переводы из `to_translate.json` в userscript | — |
-| **discover_pages.py** | Находит новые URL краулером → обновляет `pages.py` | — |
-| **save_auth.py** | Разовая авторизация → `auth.json` | — |
-| **`==UserScript==.js`** | Собственно userscript (словарь + логика DOM) | вставляется в Tampermonkey |
+| `pages.py` | Единый список URL (core/settings/user/noise/…) | сканер_1, сканер_2 |
+| `auth_utils.py` | Общий auth-флоу + детект «протухшей сессии» | сканер_1, сканер_2 |
+| `сканер_1.py` | Обходит страницы → `inventory.json` | — |
+| `сканер_2.py` | Верификация с активным userscript → отчёты + TODO | — |
+| `fix.py` | Вливает переводы из `to_translate.json` в userscript | — |
+| `discover_pages.py` | Находит новые URL краулером → обновляет `pages.py` | — |
+| `save_auth.py` | Разовая авторизация → `auth.json` | — |
+| `Userscript/GitHub Russian Translation.js` | Собственно userscript | Tampermonkey |
 
-Вспомогательные артефакты (создаются по ходу):
-`auth.json`, `inventory.json`, `verify_report.md`,
-`to_translate.json`, `to_translate_bugs.json`, `discovered_pages.json`,
-`discovered_pages.py`, `discovered_diff.md`.
+> **⚠️ Про `--script`:** путь считается от **текущей папки запуска**.
+> - из корня репозитория: `--script "Userscript/GitHub Russian Translation.js"`
+> - из `scanner/`: `--script "../Userscript/GitHub Russian Translation.js"`
 
 ---
 
@@ -35,28 +62,44 @@ pip install playwright
 playwright install chromium
 
 # 2. Один раз залогиниться → auth.json
-python save_auth.py
+python scanner/save_auth.py
 # (либо потом: сканер_1.py --force-auth — откроет headed-браузер)
 
 # 3. Собрать строки UI
-python сканер_1.py https://github.com/OWNER/REPO --scope default
+python scanner/сканер_1.py https://github.com/OWNER/REPO --scope default
 
-# 4. Верифицировать (нужен путь к userscript)
-python сканер_2.py https://github.com/OWNER/REPO \
-    --script "GitHub Russian Translation.js"
+# 4. Верифицировать
+python scanner/сканер_2.py https://github.com/OWNER/REPO \
+    --script "Userscript/GitHub Russian Translation.js"
 
 # 5. Посмотреть, чего не хватает
 cat to_translate.json
 # (отдать в ИИ или перевести руками)
 
 # 6. Влить переводы в userscript
-python fix.py --script "GitHub Russian Translation.js" \
+python scanner/fix.py --script "Userscript/GitHub Russian Translation.js" \
               --todo to_translate.json --apply --version 7.3
 
 # 7. Пере-верифицировать
-python сканер_2.py https://github.com/OWNER/REPO \
-    --script "GitHub Russian Translation.js"
+python scanner/сканер_2.py https://github.com/OWNER/REPO \
+    --script "Userscript/GitHub Russian Translation.js"
 ```
+
+### Полный прогон (все страницы, включая noise)
+
+```bash
+python scanner/сканер_1.py https://github.com/OWNER/REPO --scope all \
+    --auth auth.json --out inventory.json --md сканер.md --delay 0.5
+
+python scanner/сканер_2.py https://github.com/OWNER/REPO \
+    --script "Userscript/GitHub Russian Translation.js" \
+    --inventory inventory.json --auth auth.json --delay 3.5
+```
+
+`--scope all` = `default + noise (Explore/Trending/Marketplace/Topics) +
+discovered_*`. Даёт больше страниц, но в `noise` много user-content — фильтр
+`is_noise` в `сканер_2.py` может отбросить часть. Если важна скорость —
+`--scope default`.
 
 ---
 
@@ -83,12 +126,12 @@ python сканер_2.py https://github.com/OWNER/REPO \
                │                        └────────┬─────────┘
                │                                 │
                ▼                                 ▼
-┌──────────────────────────────┐        ┌───────────────────────────┐
-│   сканер_2.py                │◀───────│   GitHub Russian Translation.js      │
-│   с активным userscript      │        │   (словарь + логика)      │
-│   сверяет «что переведено»   │        └───────────────────────────┘
-└──────┬──────────┬────────────┘                     ▲
-       │          │                                  │
+┌──────────────────────────────┐        ┌──────────────────────────────┐
+│   сканер_2.py                │◀───────│ Userscript/GitHub Russian    │
+│   с активным userscript      │        │ Translation.js               │
+│   сверяет «что переведено»   │        │ (словарь + логика)           │
+└──────┬──────────┬────────────┘        └──────────────────────────────┘
+       │          │                                  ▲
        ▼          ▼                                  │
 ┌────────────┐ ┌────────────────────┐                │
 │ verify_    │ │ to_translate.json  │                │
@@ -147,7 +190,7 @@ from auth_utils import ensure_auth, _is_login_page
   «login form») либо `None`. Сканеры используют, чтобы поставить `auth_required`
   вместо падения.
 
-`save_auth.py` — это однократный скрипт ровно с той же задачей. Оставь, если
+`save_auth.py` — однократный скрипт ровно с той же задачей. Оставь, если
 лень запускать полный сканер ради пересоздания `auth.json`.
 
 ---
@@ -155,7 +198,7 @@ from auth_utils import ensure_auth, _is_login_page
 ### 3. `сканер_1.py` — сбор строк
 
 ```bash
-python сканер_1.py https://github.com/owner/repo --scope default --hover
+python scanner/сканер_1.py https://github.com/owner/repo --scope default --hover
 ```
 
 Что делает:
@@ -181,7 +224,7 @@ python сканер_1.py https://github.com/owner/repo --scope default --hover
       "sources": ["https://github.com/o/r/issues"],
       "is_uc": false
     },
-    "fix: something": { "is_uc": true, ... }
+    "fix: something": { "is_uc": true, "...": "..." }
   }
 }
 ```
@@ -194,8 +237,8 @@ python сканер_1.py https://github.com/owner/repo --scope default --hover
 ### 4. `сканер_2.py` — верификация
 
 ```bash
-python сканер_2.py https://github.com/owner/repo \
-    --script "GitHub Russian Translation.js" \
+python scanner/сканер_2.py https://github.com/owner/repo \
+    --script "Userscript/GitHub Russian Translation.js" \
     --inventory inventory.json
 ```
 
@@ -209,34 +252,34 @@ python сканер_2.py https://github.com/owner/repo \
 | Ситуация | Куда попадает |
 |---|---|
 | было в inventory, на странице **нет** | ✅ translated (UI / UC отдельно) |
-| было в inventory, на странице **есть** и `__ghRuTranslate` умеет | 🐞 `to_translate_bugs.json` — баг селектора/тайминга |
+| было в inventory, на странице **есть**, `__ghRuTranslate` умеет | 🐞 `to_translate_bugs.json` — баг селектора/тайминга |
 | было в inventory, на странице **есть**, userscript не умеет | ❌ `real_gaps` → в `to_translate.json` |
 | нет в inventory, но есть на странице | ➕ `unknown_clean` → тоже в `to_translate.json` |
 
 5. Пишет:
    - `verify_report.md` — сводка + разбивка;
    - `to_translate.json` — плоский словарь `{ "English": "" }` для перевода;
-   - `to_translate_bugs.json` — то, что userscript «должен» переводить, но не переводит (это для отладки userscript, не для перевода).
+   - `to_translate_bugs.json` — что userscript **должен** переводить, но не переводит (для отладки userscript, не для перевода).
 
-**`to_translate.json` — это готовый вход для ИИ.**
+**`to_translate.json` — готовый вход для ИИ.**
 
 ---
 
 ### 5. `to_translate.json` → ИИ → переводы
 
-**Шаг 1.** Открываешь `to_translate.json` — там плоский словарь без переводов:
+**Шаг 1.** Открываешь `to_translate.json` — плоский словарь без переводов:
 
 ```json
 {
   "Open in new tab": "",
   "Add file": "",
   "Compare & pull request": "",
-  "_possibly_filtered_latin": ["…"],
+  "_possibly_filtered_latin": ["..."],
   "_possibly_filtered_cyrillic_count": 0
 }
 ```
 
-**Шаг 2.** Копируешь в ChatGPT/Claude/GPT-4o/что-то ещё с промптом:
+**Шаг 2.** Копируешь в ChatGPT/Claude с промптом:
 
 > Переведи значения ключей на русский. Сохрани ключи без изменений.
 > Верни **только валидный JSON** того же формата.
@@ -251,7 +294,7 @@ python сканер_2.py https://github.com/owner/repo \
 **Шаг 4.** Влил в userscript:
 
 ```bash
-python fix.py --script "GitHub Russian Translation.js" \
+python scanner/fix.py --script "Userscript/GitHub Russian Translation.js" \
               --todo to_translate.json \
               --apply --version 7.3
 ```
@@ -278,11 +321,11 @@ python fix.py --script "GitHub Russian Translation.js" \
 Сценарий: увидел на странице непереведённую строку `Compare & pull request`,
 хочешь добавить только её.
 
-**Вариант A — через userscript вручную (быстро).**
+**Вариант A — вручную (быстро).**
 
-Открыть `GitHub Russian Translation.js`, найти `exactTranslations = {` и вставить строку
-в **любое** место словаря (но лучше — в тематический раздел, чтобы не
-конфликтовало с `fix.py`):
+Открыть `Userscript/GitHub Russian Translation.js`, найти
+`exactTranslations = {` и вставить строку в **любое** место словаря (но лучше —
+в тематический раздел, чтобы не конфликтовало с `fix.py`):
 
 ```js
 "Compare & pull request": "Сравнить и создать запрос на слияние",
@@ -290,7 +333,7 @@ python fix.py --script "GitHub Russian Translation.js" \
 
 Обновить `@version`, сохранить, в Tampermonkey — «Обновить». Всё.
 
-**Вариант B — через `fix.py` (если уже есть `to_translate.json`).**
+**Вариант B — через `fix.py`.**
 
 1. Убедиться, что в `to_translate.json` есть ключ с непустым значением:
 
@@ -303,7 +346,7 @@ python fix.py --script "GitHub Russian Translation.js" \
 2. Прогнать:
 
 ```bash
-python fix.py --script "GitHub Russian Translation.js" \
+python scanner/fix.py --script "Userscript/GitHub Russian Translation.js" \
               --todo to_translate.json \
               --apply --version 7.3
 ```
@@ -326,10 +369,10 @@ python fix.py --script "GitHub Russian Translation.js" \
 
 ```bash
 # сначала посмотреть, что найдётся — без записи
-python discover_pages.py --dry-run
+python scanner/discover_pages.py --dry-run
 
 # если ок — обновить блок AUTO-DISCOVERED в pages.py
-python discover_pages.py --update-pages-py
+python scanner/discover_pages.py --update-pages-py
 ```
 
 `discover_pages.py` **не трогает** остальной `pages.py` — только блок между
@@ -338,7 +381,7 @@ python discover_pages.py --update-pages-py
 
 ### «Хочу добавить один неинвентаризованный URL»
 
-Ручками в `pages.py`:
+Ручками в `scanner/pages.py`:
 
 - если это `core`/`settings` — добавить в `core`/`settings` списки;
 - если специфичная — создать новый список и добавить в `scopes` в `build_pages`.
@@ -346,16 +389,16 @@ python discover_pages.py --update-pages-py
 ### «Не хочу шум (Explore/Trending)»
 
 ```bash
-python сканер_1.py ... --scope core
+python scanner/сканер_1.py ... --scope core
 ```
 
-или в `pages.py` — просто убери `noise` из `default` при желании.
+или в `pages.py` — убери `noise` из `default` при желании.
 
 ### «Хочу проверить только settings»
 
 ```bash
-python сканер_1.py ... --scope settings
-python сканер_2.py ... --scope settings
+python scanner/сканер_1.py ... --scope settings
+python scanner/сканер_2.py ... --scope settings
 ```
 
 `сканер_2.py` возьмёт `scope` из `inventory.json`, если `--scope` не задан.
@@ -396,9 +439,9 @@ typeof window.__ghRuTranslate   // должно быть "function" (если э
 ```
 
 > ⚠️ **Важно:** в текущей версии userscript `window.__ghRuTranslate` **не
-> экспортируется** — `сканер_2.py` в этом случае падает на fallback
-> (`exactTranslations` парсится из текста файла). Если хочешь, чтобы
-> `_can_translate` работал точно, добавь в конец IIFE:
+> экспортируется** — `сканер_2.py` падает на fallback (парсит `exactTranslations`
+> из текста файла). Если хочешь, чтобы `_can_translate` работал точно,
+> добавь в конец IIFE:
 
 ```js
 window.__ghRuTranslate = translateText;
@@ -407,7 +450,7 @@ window.__ghRuTranslate = translateText;
 **Проверить, что сканер видит страницу:**
 
 ```bash
-python сканер_1.py ... --scope default --max-pages 3
+python scanner/сканер_1.py ... --scope default --max-pages 3
 ```
 
 Смотрит на `[OK] / [SKIP]` по каждой странице.
@@ -415,9 +458,9 @@ python сканер_1.py ... --scope default --max-pages 3
 **Протух `auth.json`:**
 
 ```bash
-python save_auth.py
+python scanner/save_auth.py
 # или
-python сканер_1.py ... --force-auth
+python scanner/сканер_1.py ... --force-auth
 ```
 
 ---
@@ -433,6 +476,28 @@ playwright
 pip install playwright
 playwright install chromium
 ```
+
+---
+
+## Git и `.gitignore`
+
+В репозитории **не должно** лежать:
+
+- `auth.json` — cookies сессии (приватно);
+- `inventory.json`, `verify_report.md`, `to_translate*.json`,
+  `discovered_pages.json`, `discovered_pages.py`, `discovered_diff.md`,
+  `сканер.md` — рабочие артефакты, могут содержать приватные строки;
+- `*.bak`, `*.orig`, `__pycache__/`, `*.pyc`.
+
+Всё это покрыто `.gitignore` в корне. Проверить:
+
+```bash
+git check-ignore -v "auth.json"       # должен вернуть строку
+git check-ignore -v "Userscript/GitHub Russian Translation.js.orig"
+```
+
+`.gitattributes` фиксирует EOL = LF для всех текстовых файлов, чтобы не было
+`warning: LF will be replaced by CRLF` и phantom-diff'а.
 
 ---
 
